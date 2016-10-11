@@ -85,7 +85,6 @@
      (do
        (cond
          (vector? expr) (eval-vector expr)
-         (string? expr) (dom/text-node expr)
          :else expr)))
    (into [])))
 
