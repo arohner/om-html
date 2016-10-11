@@ -75,20 +75,21 @@
                       :for :htmlFor}))
 
 (defn eval-vector [expr]
-  (let [[tag attrs content] (normalize-element expr)]
-    (dom/element {:tag tag
-                  :attrs (update-attrs attrs)
-                  :children (apply html* content)})))
+  (let [[tag attrs content] (normalize-element expr)
+        f (symbol "om.dom" tag)]
+    `(apply ~f ~(update-attrs attrs) ~(apply html* content))))
 
 (defn html* [& content]
-  (for [expr content]
-    (do
-      (cond
-        (vector? expr) (eval-vector expr)
-        (string? expr) (dom/text-node expr)
-        :else expr))))
+  (->>
+   (for [expr content]
+     (do
+       (cond
+         (vector? expr) (eval-vector expr)
+         (string? expr) (dom/text-node expr)
+         :else expr)))
+   (into [])))
 
-(defn html
+(defmacro html
   "Takes a hiccup-style vector of HTML, returns om.dom elements"
   [& content]
   (first (apply html* content)))
