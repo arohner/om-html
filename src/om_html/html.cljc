@@ -1,7 +1,9 @@
 (ns om-html.html
   (:require [clojure.string :as str]
             [clojure.set :refer [rename-keys]]
-            [om.dom :as dom]))
+            [clojure.spec :as s]
+            [om.dom :as dom])
+  #?(:cljs (:require-macros [om-html.html :refer (html)])))
 
 ;; hiccup-alike DSL, for Om.next
 
@@ -74,21 +76,31 @@
   (rename-keys attrs {:class :className
                       :for :htmlFor}))
 
+(s/def ::tag keyword?)
+(s/def ::attrs map?)
+(s/def ::content (s/* any?))
+(s/def ::html-vec (s/cat :tag ::tag :attrs (s/? ::attrs) :content ::content))
+
+(s/fdef eval-vector :args (s/cat :expr ::html-vec))
 (defn eval-vector [expr]
   (let [[tag attrs content] (normalize-element expr)
         f (symbol "om.dom" tag)]
-    `(apply ~f ~(update-attrs attrs) ~(apply html* content))))
+    #?(:clj `(apply ~f ~(update-attrs attrs) ~(apply html* content))
+       :cljs `(apply ~f (clj->js ~(update-attrs attrs)) ~(apply html* content)))))
 
 (defn html* [& content]
   (->>
-   (for [expr content]
-     (do
-       (cond
-         (vector? expr) (eval-vector expr)
-         :else expr)))
-   (into [])))
+   content
+   (mapv (fn [expr]
+           (cond
+             (vector? expr) (eval-vector expr)
+             :else expr)))))
 
-(defmacro html
-  "Takes a hiccup-style vector of HTML, returns om.dom elements"
-  [& content]
-  (first (apply html* content)))
+#?(:clj
+   (do
+     ;;(s/fdef html :args (s/cat :v ::html-vec))
+     (defmacro html
+       "Takes a hiccup-style vector of HTML, returns om.dom elements"
+       [v]
+       ;; macro so we return calls to e.g. om.dom/div, for CLJS advanced compilation
+       (first (apply html* [v])))))
