@@ -1,4 +1,4 @@
-(defproject arohner/om-html "0.1.1"
+(defproject arohner/om-html "0.1.2-SNAPSHOT"
   :description "hiccup for Om Next"
   :url "http://github.com/arohner/om-html"
   :license {:name "Eclipse Public License"
