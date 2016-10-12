@@ -98,9 +98,10 @@
              :else expr)))))
 
 ;;(s/fdef html :args (s/cat :v ::html-vec))
-(defmacro html
-  "Takes a hiccup-style vector of HTML, returns om.dom elements"
-  [v]
-  ;; macro so we return calls to e.g. om.dom/div, for CLJS advanced compilation
-  (let [cljs? (boolean (:ns &env))]
-    (first (apply html* {:cljs? cljs?} [v]))))
+#?(:clj
+   (defmacro html
+     "Takes a hiccup-style vector of HTML, returns om.dom elements"
+     [v]
+     ;; macro so we return calls to e.g. om.dom/div, for CLJS advanced compilation
+     (let [cljs? (boolean (:ns &env))]
+       (first (apply html* {:cljs? cljs?} [v])))))
