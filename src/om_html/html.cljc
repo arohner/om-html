@@ -2,7 +2,8 @@
   (:require [clojure.string :as str]
             [clojure.set :refer [rename-keys]]
             [clojure.spec :as s]
-            [om.dom :as dom]))
+            [om.dom :as dom])
+  #?(:cljs (:require-macros [om-html.html :refer (html)])))
 
 ;; hiccup-alike DSL, for Om.next
 
