@@ -2,8 +2,7 @@
   (:require [clojure.string :as str]
             [clojure.set :refer [rename-keys]]
             [clojure.spec :as s]
-            [om.dom :as dom])
-  #?(:cljs (:require-macros [om-html.html :refer (html)])))
+            [om.dom :as dom]))
 
 ;; hiccup-alike DSL, for Om.next
 
@@ -52,7 +51,6 @@
      (first (map strip-css (filter #(= \# (first %1)) names)))
      (vec (map strip-css (filter #(= \. (first %1)) names)))]))
 
-
 (defn normalize-element
   "Ensure an element vector is of the form [tag-name attrs content]."
   [[tag & content]]
@@ -81,26 +79,27 @@
 (s/def ::content (s/* any?))
 (s/def ::html-vec (s/cat :tag ::tag :attrs (s/? ::attrs) :content ::content))
 
-(s/fdef eval-vector :args (s/cat :expr ::html-vec))
-(defn eval-vector [expr]
+;;(s/fdef eval-vector :args (s/cat :expr ::html-vec))
+(defn eval-vector [{:keys [cljs?]} expr]
   (let [[tag attrs content] (normalize-element expr)
-        f (symbol "om.dom" tag)]
-    #?(:clj `(apply ~f ~(update-attrs attrs) ~(apply html* content))
-       :cljs `(apply ~f (clj->js ~(update-attrs attrs)) ~(apply html* content)))))
+        f (symbol "om.dom" tag)
+        attrs-form (if cljs?
+                     `(cljs.core/clj->js ~(update-attrs attrs))
+                     (update-attrs attrs))]
+    `(apply ~f ~attrs-form  ~(apply html* {:cljs? cljs?} content))))
 
-(defn html* [& content]
+(defn html* [{:keys [cljs?] :as opts} & content]
   (->>
    content
    (mapv (fn [expr]
            (cond
-             (vector? expr) (eval-vector expr)
+             (vector? expr) (eval-vector opts expr)
              :else expr)))))
 
-#?(:clj
-   (do
-     ;;(s/fdef html :args (s/cat :v ::html-vec))
-     (defmacro html
-       "Takes a hiccup-style vector of HTML, returns om.dom elements"
-       [v]
-       ;; macro so we return calls to e.g. om.dom/div, for CLJS advanced compilation
-       (first (apply html* [v])))))
+;;(s/fdef html :args (s/cat :v ::html-vec))
+(defmacro html
+  "Takes a hiccup-style vector of HTML, returns om.dom elements"
+  [v]
+  ;; macro so we return calls to e.g. om.dom/div, for CLJS advanced compilation
+  (let [cljs? (boolean (:ns &env))]
+    (first (apply html* {:cljs? cljs?} [v]))))
