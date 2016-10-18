@@ -2,8 +2,8 @@
   (:require [clojure.string :as str]
             [clojure.set :refer [rename-keys]]
             [clojure.spec :as s]
-            [om.dom :as dom])
-  #?(:cljs (:require-macros [om-html.html :refer (html)])))
+            [om.dom :as dom]
+            #?(:cljs [om.util])))
 
 ;; hiccup-alike DSL, for Om.next
 
@@ -85,26 +85,38 @@
     (first form)))
 
 (defn create-element-cljs-standard [tag attrs content]
-  #?(:cljs (.apply ~(symbol "js" (str "React.DOM." (name tag))) nil
-                   (cljs.core/into-array
-                    (cons opts# (cljs.core/map om.util/force-children children#))))))
+  #?(:cljs
+     (let [counter (atom 0)
+           key (or (:key attrs) (:react-key attrs))
+           next-key (fn [] (swap! counter inc))
+           f (-> js/window (aget "React") (aget "DOM") (aget tag))
+           attrs (if (not key)
+                   (assoc attrs :key (next-key))
+                   attrs)]
+       (f (clj->js attrs) (into-array (om.util/force-children content))))))
 
 (def wrapped '#{input textarea option select})
 
+;; same as om.dom/<tag>, but exported, so advanced compilation doesn't break
+#?(:cljs (def ^:export input (dom/wrap-form-element js/React.DOM.input "input")))
+#?(:cljs (def ^:export textarea (dom/wrap-form-element js/React.DOM.textarea "textarea")))
+#?(:cljs (def ^:export option (dom/wrap-form-element js/React.DOM.option "option")))
+#?(:cljs (def ^:export select (dom/wrap-form-element js/React.DOM.select "select")))
+
 (defn create-element-cljs-wrapped [tag attrs content]
-  (.apply ~(symbol "js" (str "om.dom." (name tag))) attrs content))
+  #?(:cljs (apply (-> js/window (aget "om_html") (aget "html") (aget tag)) (clj->js attrs) content)))
 
 (defn create-element-cljs [tag attrs content]
   (let [f (if (contains? wrapped (symbol tag))
             create-element-cljs-wrapped
             create-element-cljs-standard)]
-    (apply f tag attrs content)))
+    (f tag attrs content)))
 
 (defn create-element-clj [tag attrs content]
-  (om.dom/element {:tag tag
-                   :attrs (dissoc attrs :ref :key)
-                   :react-key (:key attrs)
-                   :children content}))
+  #?(:clj (om.dom/element {:tag tag
+                           :attrs (dissoc attrs :ref :key)
+                           :react-key (or (:key attrs) (:react-key attrs))
+                           :children content})))
 
 (defn create-element [tag attrs content]
   #?(:clj (create-element-clj tag attrs content)
@@ -113,8 +125,7 @@
 (defn compile-vector [expr]
   (let [[tag attrs content] (normalize-element expr)
         f (symbol "om.dom" tag)
-        attrs #?(:clj (update-attrs attrs)
-                 :cljs (cljs.core/clj->js (update-attrs attrs)))]
+        attrs (update-attrs attrs)]
     (create-element tag attrs (mapv html* content))))
 
 (defn html* [& content]
@@ -123,7 +134,8 @@
    (mapv (fn [expr]
            (cond
              (vector? expr) (compile-vector expr)
-             (list? expr) (map html* expr)
+             (list? expr) (do
+                            (map html* expr))
              :else expr)))))
 
 (defn html
