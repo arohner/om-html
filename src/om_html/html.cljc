@@ -7,7 +7,7 @@
 
 ;; hiccup-alike DSL, for Om.next
 
-(declare html*)
+(declare html* html)
 
 (defn strip-css
   "Strip the # and . characters from the beginning of `s`."
@@ -80,28 +80,53 @@
 (s/def ::content (s/* any?))
 (s/def ::html-vec (s/cat :tag ::tag :attrs (s/? ::attrs) :content ::content))
 
-;;(s/fdef eval-vector :args (s/cat :expr ::html-vec))
-(defn eval-vector [{:keys [cljs?]} expr]
+(defn form-name [form]
+  (when (and (seq? form) (symbol? (first form)))
+    (first form)))
+
+(defn create-element-cljs-standard [tag attrs content]
+  #?(:cljs (.apply ~(symbol "js" (str "React.DOM." (name tag))) nil
+                   (cljs.core/into-array
+                    (cons opts# (cljs.core/map om.util/force-children children#))))))
+
+(def wrapped '#{input textarea option select})
+
+(defn create-element-cljs-wrapped [tag attrs content]
+  (.apply ~(symbol "js" (str "om.dom." (name tag))) attrs content))
+
+(defn create-element-cljs [tag attrs content]
+  (let [f (if (contains? wrapped (symbol tag))
+            create-element-cljs-wrapped
+            create-element-cljs-standard)]
+    (apply f tag attrs content)))
+
+(defn create-element-clj [tag attrs content]
+  (om.dom/element {:tag tag
+                   :attrs (dissoc attrs :ref :key)
+                   :react-key (:key attrs)
+                   :children content}))
+
+(defn create-element [tag attrs content]
+  #?(:clj (create-element-clj tag attrs content)
+     :cljs (create-element-cljs tag attrs content)))
+
+(defn compile-vector [expr]
   (let [[tag attrs content] (normalize-element expr)
         f (symbol "om.dom" tag)
-        attrs-form (if cljs?
-                     `(cljs.core/clj->js ~(update-attrs attrs))
-                     (update-attrs attrs))]
-    `(apply ~f ~attrs-form  ~(apply html* {:cljs? cljs?} content))))
+        attrs #?(:clj (update-attrs attrs)
+                 :cljs (cljs.core/clj->js (update-attrs attrs)))]
+    (create-element tag attrs (mapv html* content))))
 
-(defn html* [{:keys [cljs?] :as opts} & content]
+(defn html* [& content]
   (->>
    content
    (mapv (fn [expr]
            (cond
-             (vector? expr) (eval-vector opts expr)
+             (vector? expr) (compile-vector expr)
+             (list? expr) (map html* expr)
              :else expr)))))
 
-;;(s/fdef html :args (s/cat :v ::html-vec))
-#?(:clj
-   (defmacro html
-     "Takes a hiccup-style vector of HTML, returns om.dom elements"
-     [v]
-     ;; macro so we return calls to e.g. om.dom/div, for CLJS advanced compilation
-     (let [cljs? (boolean (:ns &env))]
-       (first (apply html* {:cljs? cljs?} [v])))))
+(defn html
+  "Takes a hiccup-style vector of HTML, returns om.dom elements"
+  [v]
+  (first (apply html* [v])))
