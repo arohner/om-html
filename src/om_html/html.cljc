@@ -136,6 +136,8 @@
              (vector? expr) (compile-vector expr)
              (list? expr) (do
                             (map html* expr))
+             (string? expr) #?(:clj (dom/react-text-node expr)
+                               :cljs expr)
              :else expr)))))
 
 (defn html
