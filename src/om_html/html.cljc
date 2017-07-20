@@ -1,7 +1,7 @@
 (ns om-html.html
   (:require [clojure.string :as str]
             [clojure.set :refer [rename-keys]]
-            [clojure.spec :as s]
+            [clojure.spec.alpha :as s]
             [om.dom :as dom]
             #?(:cljs [om.util])))
 
